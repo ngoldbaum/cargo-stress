@@ -199,7 +199,10 @@ fn worker(
                     if output.status.success() {
                         results_tx.send("".as_bytes().to_vec())
                     } else {
-                        let mut result = "\nstdout:\n".as_bytes().to_vec();
+                        let mut result: Vec<u8> = format!("{} failed!\n", test_bin.display())
+                            .bytes()
+                            .collect();
+                        result.extend("\nstdout:\n".as_bytes().to_vec());
                         result.extend(output.stdout);
                         result.extend("\nstderr:\n".as_bytes().to_vec());
                         result.extend(output.stderr);
