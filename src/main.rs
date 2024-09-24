@@ -12,6 +12,8 @@ use std::sync::mpsc;
 use std::thread;
 use std::time;
 
+use std::os::unix::process::ExitStatusExt;
+
 use serde::Deserialize;
 use serde_json;
 
@@ -207,8 +209,22 @@ fn worker(
                         result.extend("\nstderr:\n".as_bytes().to_vec());
                         result.extend(output.stderr);
                         let code = output.status.code();
-                        if code.is_some() {
-                            result.extend(format!("status code: {}\n", code.unwrap()).bytes());
+                        match code {
+                            Some(status) => {
+                                result.extend(format!("status code: {}\n", status).bytes())
+                            }
+                            None => {
+                                result.extend(
+                                    format!(
+                                        "exited with signal: {}\n",
+                                        output.status.signal().unwrap()
+                                    )
+                                    .bytes(),
+                                );
+                                if output.status.core_dumped() {
+                                    result.extend("(code dumped)\n".bytes());
+                                };
+                            }
                         }
                         results_tx.send(result)
                     }
