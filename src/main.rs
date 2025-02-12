@@ -90,11 +90,7 @@ fn run(args: ParsedArgs) -> Result<(), Box<dyn error::Error>> {
     loop {
         let result = run_results_rx.recv()?;
         let runs = runs.fetch_add(1, atomic::Ordering::SeqCst) + 1;
-        let failures = if result.len() > 0 {
-            failures.fetch_add(1, atomic::Ordering::SeqCst) + 1
-        } else {
-            failures.load(atomic::Ordering::SeqCst)
-        };
+        let failures = 0;
 
         // Print at the beginning of the first run so we know it's going.
         if runs == 1 {
@@ -106,16 +102,16 @@ fn run(args: ParsedArgs) -> Result<(), Box<dyn error::Error>> {
             );
         };
 
+        eprintln!(
+            "{} runs completed, {} failures, over {}s",
+            runs,
+            failures,
+            start.elapsed().as_secs()
+        );
+        io::stderr()
+            .write_all(&result)
+            .expect("writing test output to stderr");
         if failures >= MAX_FAILURES {
-            eprintln!(
-                "{} runs completed, {} failures, over {}s",
-                runs,
-                failures,
-                start.elapsed().as_secs()
-            );
-            io::stderr()
-                .write_all(&result)
-                .expect("writing test failure to stderr");
             process::exit(2);
         }
     }
@@ -199,7 +195,14 @@ fn worker(
                 Err(err) => results_tx.send(err.to_string().into_bytes()),
                 Ok(output) => {
                     if output.status.success() {
-                        results_tx.send("".as_bytes().to_vec())
+                        let mut result: Vec<u8> = format!("{} succeeded!\n", test_bin.display())
+                            .bytes()
+                            .collect();
+                        result.extend("\nstdout:\n".as_bytes().to_vec());
+                        result.extend(output.stdout);
+                        result.extend("\nstderr:\n".as_bytes().to_vec());
+                        result.extend(output.stderr);
+                        results_tx.send(result)
                     } else {
                         let mut result: Vec<u8> = format!("{} failed!\n", test_bin.display())
                             .bytes()
